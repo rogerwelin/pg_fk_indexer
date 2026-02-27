@@ -1,4 +1,4 @@
 CREATE FUNCTION pg_fk_indexer_hello()
 RETURNS text
-AS 'MODULE_PATHNAME', 'pg_fk_indexer'
+AS 'MODULE_PATHNAME', 'pg_fk_indexer_hello'
 LANGUAGE C IMMUTABLE STRICT;
