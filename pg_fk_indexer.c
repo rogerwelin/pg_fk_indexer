@@ -66,9 +66,24 @@ static void pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryStri
   if (nodeTag(parsetree) == T_AlterTableStmt) {
     AlterTableStmt *stmt = (AlterTableStmt *) parsetree;
     char *tableName = stmt->relation->relname;
-    elog(NOTICE, "pg_fk_indexer: altering table: '%s'", tableName);
-  }
+    ListCell *cell;
 
+    elog(NOTICE, "pg_fk_indexer: altering table: '%s'", tableName);
+
+    foreach(cell, stmt->cmds) {
+      AlterTableCmd *cmd = (AlterTableCmd *) lfirst(cell);
+
+      /* only care about adding constraints */
+      if (cmd->subtype == AT_AddConstraint && IsA(cmd->def, Constraint)) {
+        Constraint *con = (Constraint *) cmd->def;
+
+        if (con->contype == CONSTR_FOREIGN) {
+          char *colName = strVal(linitial(con->fk_attrs));
+          elog(NOTICE, "pg_fk_indexer: Found ALTER TABLE FK on column '%s'", colName);
+        }
+      }
+    }
+  }
 
   // Chain to previous hook if one exists, otherwise call the default executor.
   // Skipping this would swallow the DDL and break other extensions in the hook chain.
