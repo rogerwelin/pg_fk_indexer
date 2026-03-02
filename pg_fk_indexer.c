@@ -9,6 +9,8 @@ PG_MODULE_MAGIC;
 
 static ProcessUtility_hook_type prev_utility_hook = NULL;
 
+
+// Postgres 14+, check this
 static void pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryString,
                                   bool readOnlyTree, ProcessUtilityContext context,
                                   ParamListInfo params, QueryEnvironment *queryEnv,
