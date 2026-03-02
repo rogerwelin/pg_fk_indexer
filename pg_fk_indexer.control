@@ -1,4 +1,5 @@
-comment = 'pg_fk_indexer'
+comment = 'Automatically creates indexes on foreign key columns'
 default_version = '1.0'
 relocatable = true
+superuser = true
 module_pathname = '$libdir/pg_fk_indexer'
