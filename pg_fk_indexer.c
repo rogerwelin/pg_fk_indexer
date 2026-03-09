@@ -1,19 +1,28 @@
 #include "postgres.h"
 #include "fmgr.h"
 
+/* access — low-level heap/index scanning and table access */
 #include "access/attnum.h"
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "access/relation.h"
 #include "access/stratnum.h"
 #include "access/table.h"
+
+/* catalog — system catalog lookups (pg_constraint, pg_index, namespace resolution) */
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_index.h"
+
+/* nodes — parse tree types and linked list utilities */
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+
+/* tcop — utility statement hook infrastructure */
 #include "tcop/utility.h"
+
+/* utils — arrays, caching, relation metadata, logging */
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
