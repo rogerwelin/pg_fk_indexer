@@ -33,5 +33,7 @@ ADD FOREIGN KEY (user_id) REFERENCES users(id);
 fk4:: (composite)
 
 
+### Run tests
 
+make installcheck
 
