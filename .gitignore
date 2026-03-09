@@ -3,3 +3,8 @@ pg_fk_indexer.bc
 pg_fk_indexer.o
 pg_fk_indexer.so
 .cache
+
+# pg_regress output
+results/
+regression.diffs
+regression.out
