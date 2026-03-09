@@ -1,81 +1,130 @@
 #include "postgres.h"
 #include "fmgr.h"
-#include "utils/builtins.h"
-#include "tcop/utility.h" // utility hook
+
+#include "access/attnum.h"
+#include "access/genam.h"
+#include "access/htup_details.h"
+#include "access/relation.h"
+#include "access/stratnum.h"
+#include "access/table.h"
+#include "catalog/namespace.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_index.h"
 #include "nodes/nodes.h"
-#include "nodes/pg_list.h"
 #include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "tcop/utility.h"
+#include "utils/array.h"
+#include "utils/builtins.h"
 #include "utils/elog.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
+#include "utils/syscache.h"
 
 PG_MODULE_MAGIC;
 
 static ProcessUtility_hook_type prev_utility_hook = NULL;
 
-static void extract_fks_from_create(CreateStmt *stmt) {
-  // 2. In Postgres, a table's name and schema are stored in a struct called 'relation'
-  char *tableName = stmt->relation->relname;
-  ListCell *cell;
-  elog(NOTICE, "pg_fk_indexer: Analyzing CREATE TABLE '%s'", tableName);
+static bool is_column_indexed(Oid relid, AttrNumber attnum) {
+  Relation rel;
+  List *indexlist;
+  ListCell *lc;
+  bool found = false;
 
-  // Iterate through the table elements (columns and constraints)
-  foreach(cell, stmt->tableElts) {
-    Node *element = (Node *) lfirst(cell);
+  // open table with light lock
+  rel = relation_open(relid, AccessShareLock);
 
-    /* CASE A: Table-level Constraint
-    * Example: CREATE TABLE t (a int, b int, FOREIGN KEY (a) REFERENCES other(x));
-    * The parser sees this as a standalone Constraint node in the list.
-    */
-    if (IsA(element, Constraint))  {
-      Constraint *con = (Constraint *) element;
-      if (con->contype == CONSTR_FOREIGN) {
-        /* Table-level FKs store column names in the 'fk_attrs' list */
-        char *colName = strVal(linitial(con->fk_attrs));
-        elog(NOTICE, "pg_fk_indexer: Found table-level FK on column '%s'", colName);
-      }
+  // get oid of all indexes on this table
+  indexlist = RelationGetIndexList(rel);
+
+  foreach(lc, indexlist) {
+    Oid indexOid = lfirst_oid(lc);
+    HeapTuple indexTuple;
+    Form_pg_index indexForm;
+
+    /* Look up the specific index in the pg_index catalog */
+    indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexOid));
+    if (!HeapTupleIsValid(indexTuple)) {
+      continue;
     }
 
-   /* CASE B: Inline Column Constraint
-    * Example: CREATE TABLE t (a int REFERENCES other(x));
-    * The parser sees a ColumnDef node; the FK is nested inside its 'constraints' list.
+    indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+
+    /* * Check if our column is the LEADING column (index 0).
+       * Postgres represents the array of columns in indkey.
     */
-    if (IsA(element, ColumnDef)) {
-      ColumnDef *colDef = (ColumnDef *) element;
-      ListCell *colCell;
+    if (indexForm->indkey.values[0] == attnum) {
+      found = true;
+      ReleaseSysCache(indexTuple);
+      break;
+    }
+    ReleaseSysCache(indexTuple);
+  }
 
-      foreach(colCell, colDef->constraints) {
-        Node *colElement = (Node *) lfirst(colCell);
+  /* 3. Close the relation and return our findings */
+  relation_close(rel, AccessShareLock);
 
-        if (IsA(colElement, Constraint)) {
-          Constraint *con = (Constraint *) colElement;
-          if (con->contype == CONSTR_FOREIGN) {
-            /* For inline FKs, the column name is the name of the parent ColumnDef */
-            elog(NOTICE, "pg_fk_indexer: Found inline FK on column '%s'", colDef->colname);
-          }
+  return found;
+}
+
+static void analyze_table_fks(Oid relid, RangeVar *relation) {
+  Relation pg_constraint_rel;
+  SysScanDesc scan;
+  ScanKeyData skey;
+  HeapTuple tuple;
+
+  pg_constraint_rel = table_open(ConstraintRelationId, AccessShareLock);
+
+  ScanKeyInit(&skey, 
+    Anum_pg_constraint_conrelid,
+    BTEqualStrategyNumber, 
+    F_OIDEQ,
+    ObjectIdGetDatum(relid));
+
+  scan = systable_beginscan(pg_constraint_rel, 
+    ConstraintRelidTypidNameIndexId, 
+    true, NULL, 1, &skey);
+
+  while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
+    Form_pg_constraint con = (Form_pg_constraint) GETSTRUCT(tuple);
+
+    if (con->contype == CONSTRAINT_FOREIGN) {
+      bool        isNull;
+      Datum       adatum;
+      
+      ArrayType  *arr;
+      int16      *attnums;
+      AttrNumber  attnum;
+      char       *colName;
+
+      adatum = heap_getattr(tuple, 
+        Anum_pg_constraint_conkey, 
+        RelationGetDescr(pg_constraint_rel), 
+        &isNull);
+
+      if (!isNull) {
+        arr = DatumGetArrayTypeP(adatum);
+        attnums = (int16 *) ARR_DATA_PTR(arr);
+        
+        /* Now we can assign values safely */
+        attnum = attnums[0];
+        colName = get_attname(relid, attnum, false);
+
+        if (!is_column_indexed(relid, attnum)) {
+          elog(NOTICE, "pg_fk_indexer: %s.%s NEEDS an index!", relation->relname, colName);
+          /* inject_index(relation, colName); */
+        }
+        
+        if (colName) {
+          pfree(colName);
         }
       }
     }
   }
-}
 
-static void extract_fks_from_alter(AlterTableStmt *stmt) {
-  char *tableName = stmt->relation->relname;
-  ListCell *cell;
-
-  elog(NOTICE, "pg_fk_indexer: Analyzing ALTER TABLE '%s'", tableName);
-
-  foreach(cell, stmt->cmds) {
-    AlterTableCmd *cmd = (AlterTableCmd *) lfirst(cell);
-
-    /* We only care about adding constraints */
-    if (cmd->subtype == AT_AddConstraint && IsA(cmd->def, Constraint)) {
-      Constraint *con = (Constraint *) cmd->def;
-
-      if (con->contype == CONSTR_FOREIGN) {
-        char *colName = strVal(linitial(con->fk_attrs));
-        elog(NOTICE, "pg_fk_indexer: Found ALTER TABLE FK on column '%s'", colName);
-      }
-    }
-  }
+  systable_endscan(scan);
+  table_close(pg_constraint_rel, AccessShareLock);
 }
 
 // Postgres 14+, check this
@@ -85,20 +134,29 @@ static void pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryStri
                                   DestReceiver *dest, QueryCompletion *qc) {
   Node *parsetree = pstmt->utilityStmt;
 
-  // Chain to previous hook if one exists, otherwise call the default executor.
-  // Skipping this would swallow the DDL and break other extensions in the hook chain.
   if (prev_utility_hook) {
     prev_utility_hook(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
   } else {
     standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
   }
 
-  if (nodeTag(parsetree) == T_CreateStmt) {
-    extract_fks_from_create((CreateStmt *) parsetree);
-  }
+  // Only act on the user's primary command
+  if (context == PROCESS_UTILITY_TOPLEVEL) {
+    RangeVar *rv = NULL;
 
-  if (nodeTag(parsetree) == T_AlterTableStmt) {
-    extract_fks_from_alter((AlterTableStmt *) parsetree);
+    if (IsA(parsetree, CreateStmt)) {
+      rv = ((CreateStmt *) parsetree)->relation;
+    } else if (IsA(parsetree, AlterTableStmt)) {
+        rv = ((AlterTableStmt *) parsetree)->relation;
+    }
+
+    if (rv) {
+      // Table exists now, get its OID
+      Oid relid = RangeVarGetRelid(rv, NoLock, true);
+      if (OidIsValid(relid)) {
+        analyze_table_fks(relid, rv);
+      }
+    }
   }
 }
 
