@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pg: [14, 15, 16, 17]
+    name: PostgreSQL ${{ matrix.pg }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL ${{ matrix.pg }}
+        run: |
+          sudo apt-get install -y --no-install-recommends \
+            postgresql-${{ matrix.pg }} \
+            postgresql-server-dev-${{ matrix.pg }}
+
+      - name: Start PostgreSQL
+        run: |
+          sudo pg_ctlcluster ${{ matrix.pg }} main start
+
+      - name: Build and install extension
+        run: |
+          make PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+          sudo make install PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+
+      - name: Create test role
+        run: |
+          sudo -u postgres psql -c "CREATE ROLE runner WITH LOGIN SUPERUSER"
+
+      - name: Run tests
+        run: |
+          make installcheck PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+
+      - name: Show diff on failure
+        if: failure()
+        run: |
+          cat regression.diffs || true
