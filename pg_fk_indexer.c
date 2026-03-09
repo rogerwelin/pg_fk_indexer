@@ -61,7 +61,7 @@ static void inject_index(RangeVar *relation, char *colName) {
                    quote_identifier(relation->relname),
                    quote_identifier(colName));
 
-  elog(NOTICE, "pg_fk_indexer: Auto-indexing: %s", buf.data);
+  //elog(NOTICE, "pg_fk_indexer: Auto-indexing: %s", buf.data);
 
   if ((ret = SPI_connect()) != SPI_OK_CONNECT)
     elog(ERROR, "pg_fk_indexer: SPI_connect failed with error %d", ret);
@@ -162,7 +162,7 @@ static void analyze_table_fks(Oid relid, RangeVar *relation) {
         colName = get_attname(relid, attnum, false);
 
         if (!is_column_indexed(relid, attnum)) {
-          elog(NOTICE, "pg_fk_indexer: %s.%s NEEDS an index!", relation->relname, colName);
+          //elog(NOTICE, "pg_fk_indexer: %s.%s NEEDS an index!", relation->relname, colName);
           inject_index(relation, colName);
         }
         
