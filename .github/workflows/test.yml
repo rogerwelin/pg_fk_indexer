@@ -30,9 +30,15 @@ jobs:
             postgresql-${{ matrix.pg }} \
             postgresql-server-dev-${{ matrix.pg }}
 
+      - name: Stop existing PostgreSQL instances
+        run: |
+          sudo pg_lsclusters -h | awk '{print $1, $2}' | while read ver name; do
+            sudo pg_dropcluster --stop "$ver" "$name" || true
+          done
+
       - name: Start PostgreSQL
         run: |
-          sudo pg_createcluster ${{ matrix.pg }} main --start || sudo pg_ctlcluster ${{ matrix.pg }} main start
+          sudo pg_createcluster ${{ matrix.pg }} main --start
 
       - name: Build and install extension
         run: |
