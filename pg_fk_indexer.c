@@ -9,6 +9,12 @@
 #include "access/stratnum.h"
 #include "access/table.h"
 
+/* executor — SPI (Server Programming Interface) for running SQL from C */
+#include "executor/spi.h"
+
+/* lib — string buffer utilities */
+#include "lib/stringinfo.h"
+
 /* catalog — system catalog lookups (pg_constraint, pg_index, namespace resolution) */
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
@@ -35,6 +41,38 @@ PG_MODULE_MAGIC;
 
 static ProcessUtility_hook_type prev_utility_hook = NULL;
 
+static void inject_index(RangeVar *relation, char *colName) {
+  StringInfoData buf;
+  int ret;
+
+  initStringInfo(&buf);
+
+  /* CREATE INDEX IF NOT EXISTS <index_name> ON <schema>.<table> (<column>)
+   * Use quote_identifier to handle names with spaces, reserved words, or mixed case.
+   */
+  appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s_%s_idx ON %s%s%s (%s)",
+                   quote_identifier(relation->relname), 
+                   quote_identifier(colName),
+                   (relation->schemaname ? quote_identifier(relation->schemaname) : ""),
+                   (relation->schemaname ? "." : ""),
+                   quote_identifier(relation->relname),
+                   quote_identifier(colName));
+
+  elog(NOTICE, "pg_fk_indexer: Auto-indexing: %s", buf.data);
+
+  if ((ret = SPI_connect()) != SPI_OK_CONNECT)
+    elog(ERROR, "pg_fk_indexer: SPI_connect failed with error %d", ret);
+
+  ret = SPI_execute(buf.data, false, 0);
+    
+  if (ret != SPI_OK_UTILITY)
+    elog(ERROR, "pg_fk_indexer: SPI_execute failed with error %d", ret);
+
+  SPI_finish();
+  pfree(buf.data);
+}
+
+
 static bool is_column_indexed(Oid relid, AttrNumber attnum) {
   Relation rel;
   List *indexlist;
@@ -60,8 +98,8 @@ static bool is_column_indexed(Oid relid, AttrNumber attnum) {
 
     indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
 
-    /* * Check if our column is the LEADING column (index 0).
-       * Postgres represents the array of columns in indkey.
+    /*  Check if our column is the LEADING column (index 0).
+     * Postgres represents the array of columns in indkey.
     */
     if (indexForm->indkey.values[0] == attnum) {
       found = true;
@@ -122,7 +160,7 @@ static void analyze_table_fks(Oid relid, RangeVar *relation) {
 
         if (!is_column_indexed(relid, attnum)) {
           elog(NOTICE, "pg_fk_indexer: %s.%s NEEDS an index!", relation->relname, colName);
-          /* inject_index(relation, colName); */
+          inject_index(relation, colName);
         }
         
         if (colName) {
