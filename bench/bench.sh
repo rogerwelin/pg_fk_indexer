@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Configuration
 DB="${BENCH_DB:-bench_fk_indexer}"
-PSQL="psql -X -q -d $DB"
+PSQL="sudo -u postgres psql -X -q -d $DB"
 NUM_FKS="${NUM_FKS:-100}"
 WARMUP="${WARMUP:-10}"
 TABLE_ROWS="${TABLE_ROWS:-0}"  # set >0 to test with data
@@ -102,11 +102,22 @@ run_benchmark() {
   info "Raw timings saved to bench/results_${label// /_}.csv"
 }
 
+verify_indexes() {
+  local expected=$1
+  local actual
+  actual=$($PSQL -t -c "SELECT count(*) FROM pg_indexes WHERE tablename = 'child' AND indexname LIKE 'child_fk_col_%_idx';" | tr -d ' ')
+  if [ "$actual" -eq "$expected" ]; then
+    info "Index check PASSED: $actual/$expected FK indexes created"
+  else
+    info "Index check FAILED: $actual/$expected FK indexes created"
+  fi
+}
+
 # ── main ─────────────────────────────────────────────────────────────
 
 info "Creating benchmark database"
-psql -X -q -d postgres -c "DROP DATABASE IF EXISTS $DB;" 2>/dev/null || true
-psql -X -q -d postgres -c "CREATE DATABASE $DB;"
+sudo -u postgres psql -X -q -d postgres -c "DROP DATABASE IF EXISTS $DB;" 2>/dev/null || true
+sudo -u postgres psql -X -q -d postgres -c "CREATE DATABASE $DB;"
 
 setup_parent_table
 
@@ -114,11 +125,24 @@ setup_parent_table
 info "Run 1: WITHOUT extension"
 sql "DROP EXTENSION IF EXISTS pg_fk_indexer;"
 run_benchmark "without_extension"
+verify_indexes 0
 
 # ── Run 2: with extension ──
 info "Run 2: WITH extension"
 setup_parent_table
 sql "CREATE EXTENSION IF NOT EXISTS pg_fk_indexer;"
+sql "ALTER DATABASE $DB SET session_preload_libraries = 'pg_fk_indexer';"
 run_benchmark "with_extension"
+verify_indexes "$NUM_FKS"
 
-info "Done. Compare the two result files in bench/"
+# ── Run 3: with extension, indexes pre-created (isolates extension overhead only) ──
+info "Run 3: WITH extension, pre-created indexes (extension overhead only)"
+setup_parent_table
+create_child_table "$NUM_FKS"
+for i in $(seq 1 "$NUM_FKS"); do
+  sql "CREATE INDEX IF NOT EXISTS child_fk_col_${i}_idx ON child (fk_col_${i});"
+done
+run_benchmark "extension_overhead_only"
+verify_indexes "$NUM_FKS"
+
+info "Done. Compare the result files in bench/"

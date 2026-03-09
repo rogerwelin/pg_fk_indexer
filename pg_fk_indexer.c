@@ -20,6 +20,9 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_index.h"
 
+/* utils — function OID constants (F_OIDEQ, etc.) */
+#include "utils/fmgroids.h"
+
 /* nodes — parse tree types and linked list utilities */
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
