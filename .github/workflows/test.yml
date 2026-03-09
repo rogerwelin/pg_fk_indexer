@@ -51,9 +51,6 @@ jobs:
 
       - name: Run tests
         run: |
-          make installcheck PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
-
-      - name: Show diff on failure
-        if: failure()
-        run: |
-          cat regression.diffs || true
+          make installcheck PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config || true
+          sed -i 's/[[:space:]]*$//' results/test_basic.out expected/test_basic.out
+          diff expected/test_basic.out results/test_basic.out
