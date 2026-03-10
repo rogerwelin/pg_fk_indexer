@@ -1,4 +1,4 @@
-## pg_fk_indexer
+## pg_fk_indexer - auto-index FK columns
 
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14--18-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/license-PostgreSQL-green.svg)](LICENSE)
