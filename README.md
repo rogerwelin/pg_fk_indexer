@@ -1,9 +1,10 @@
 ## pg_fk_indexer
 
-PostgreSQL extension that automatically creates indexes on foreign key columns — bringing a behavior that MySQL has provided by default since day one.
-
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14--18-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/license-PostgreSQL-green.svg)](LICENSE)
+
+PostgreSQL extension that automatically creates indexes on foreign key columns — bringing a behavior that MySQL has provided by default since day one.
+
 
 ### Why?
 
@@ -38,7 +39,7 @@ CREATE TABLE orders (user_id int REFERENCES users(id));
 -- ^^ index on orders(user_id) is created automatically
 ```
 
-Or load it automatically for all sessions by adding to `postgresql.conf`:
+Or (recommended) load it automatically for all sessions by adding to `postgresql.conf`:
 
 ```
 shared_preload_libraries = 'pg_fk_indexer'
@@ -47,7 +48,7 @@ shared_preload_libraries = 'pg_fk_indexer'
 ### Configuration
 
 ```sql
--- Disable for the current session (e.g. bulk loading)
+-- Disable for the current session
 SET pg_fk_indexer.enabled = off;
 
 -- Re-enable
