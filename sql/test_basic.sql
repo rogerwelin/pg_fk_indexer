@@ -67,6 +67,41 @@ SELECT indexname FROM pg_indexes
 DROP TABLE multi_fk;
 DROP TABLE another_parent;
 
+-- Test 6a: Composite PK with one FK column
+CREATE TABLE products(id int PRIMARY KEY, name text);
+CREATE TABLE order_items(
+  order_id int,
+  product_id int,
+  quantity int,
+  PRIMARY KEY (order_id, product_id),
+  CONSTRAINT fk_product FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+SELECT indexname FROM pg_indexes
+  WHERE tablename = 'order_items' AND indexname LIKE '%_idx';
+
+DROP TABLE order_items;
+DROP TABLE products;
+
+-- Test 6b: Composite PK with both columns as FKs (junction table)
+-- user_id is the leading column of the composite PK so it's already covered;
+-- only product_id needs a separate index (mirrors MySQL behavior)
+CREATE TABLE products(id int PRIMARY KEY, name text);
+CREATE TABLE user_products(
+  user_id int,
+  product_id int,
+  PRIMARY KEY (user_id, product_id),
+  CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_product FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+SELECT indexname FROM pg_indexes
+  WHERE tablename = 'user_products' AND indexname LIKE '%_idx'
+  ORDER BY indexname;
+
+DROP TABLE user_products;
+DROP TABLE products;
+
 -- Cleanup
 DROP TABLE users;
 DROP EXTENSION pg_fk_indexer;
