@@ -1,4 +1,4 @@
-## pg_fk_indexer: PostgreSQL extension for indexing foreign keys
+## pg_fk_indexer: PostgreSQL extension for automatically indexing foreign keys
 
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14--18-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/license-PostgreSQL-green.svg)](LICENSE)
