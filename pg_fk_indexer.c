@@ -43,6 +43,7 @@
 PG_MODULE_MAGIC;
 
 static ProcessUtility_hook_type prev_utility_hook = NULL;
+static bool pg_fk_indexer_enabled = true;
 
 static void inject_index(RangeVar *relation, char *colName) {
   StringInfoData buf;
@@ -191,7 +192,7 @@ static void pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryStri
   }
 
   // Only act on the user's primary command
-  if (context == PROCESS_UTILITY_TOPLEVEL) {
+  if (context == PROCESS_UTILITY_TOPLEVEL && pg_fk_indexer_enabled) {
     RangeVar *rv = NULL;
 
     if (IsA(parsetree, CreateStmt)) {
@@ -212,6 +213,17 @@ static void pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryStri
 
 // runs when extention is loaded into memory
 void _PG_init(void) {
+  DefineCustomBoolVariable("pg_fk_indexer.enabled",
+                           "Automatically create indexes on foreign key columns",
+                           NULL,
+                           &pg_fk_indexer_enabled,
+                           true,
+                           PGC_USERSET,
+                           0,
+                           NULL,
+                           NULL,
+                           NULL);
+
   prev_utility_hook = ProcessUtility_hook;
 
   ProcessUtility_hook = pg_fk_indexer_utility_hook;
