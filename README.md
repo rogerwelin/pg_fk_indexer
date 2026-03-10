@@ -3,7 +3,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14--18-blue.svg)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/license-PostgreSQL-green.svg)](LICENSE)
 
-PostgreSQL extension that automatically creates indexes on foreign key columns — bringing a behavior that MySQL has provided by default since day one.
+PostgreSQL extension that automatically creates indexes on foreign key columns - bringing a behavior that MySQL has provided by default since day one.
 
 
 ### Why?
