@@ -44,6 +44,7 @@ PG_MODULE_MAGIC;
 
 static ProcessUtility_hook_type prev_utility_hook = NULL;
 static bool pg_fk_indexer_enabled = true;
+static bool pg_fk_indexer_debug = false;
 
 static void
 inject_index(RangeVar *relation, char **colNames, int nCols)
@@ -75,6 +76,9 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
                 appendStringInfoString(&buf, quote_identifier(colNames[i]));
         }
         appendStringInfoChar(&buf, ')');
+
+        if (pg_fk_indexer_debug)
+                elog(LOG, "pg_fk_indexer: executing: %s", buf.data);
 
         if ((ret = SPI_connect()) != SPI_OK_CONNECT)
                 elog(ERROR, "pg_fk_indexer: SPI_connect failed with error %d", ret);
@@ -143,6 +147,9 @@ is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
 
                 if (match)
                 {
+                        if (pg_fk_indexer_debug)
+                                elog(LOG, "pg_fk_indexer: FK columns already covered by index %u",
+                                         indexOid);
                         found = true;
                         break;
                 }
@@ -170,8 +177,8 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                     ObjectIdGetDatum(relid));
 
         scan = systable_beginscan(pg_constraint_rel,
-                                                  ConstraintRelidTypidNameIndexId,
-                                                  true, NULL, 1, &skey);
+                                  ConstraintRelidTypidNameIndexId,
+                                  true, NULL, 1, &skey);
 
         while (HeapTupleIsValid(tuple = systable_getnext(scan)))
         {
@@ -179,6 +186,9 @@ analyze_table_fks(Oid relid, RangeVar *relation)
 
                 if (con->contype == CONSTRAINT_FOREIGN)
                 {
+                        if (pg_fk_indexer_debug)
+                                elog(LOG, "pg_fk_indexer: found FK constraint \"%s\" on table %u",
+                                         NameStr(con->conname), relid);
                         bool            isNull;
                         Datum           adatum;
 
@@ -246,6 +256,12 @@ pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryString,
         {
                 RangeVar   *rv = NULL;
 
+                if (pg_fk_indexer_debug)
+                        elog(LOG, "pg_fk_indexer: intercepted utility command: %s",
+                                 nodeTag(parsetree) == T_CreateStmt ? "CREATE TABLE" :
+                                 nodeTag(parsetree) == T_AlterTableStmt ? "ALTER TABLE" :
+                                 "other");
+
                 if (IsA(parsetree, CreateStmt))
                 {
                         rv = ((CreateStmt *) parsetree)->relation;
@@ -277,6 +293,17 @@ _PG_init(void)
                                   NULL,
                                   &pg_fk_indexer_enabled,
                                   true,
+                                  PGC_USERSET,
+                                  0,
+                                  NULL,
+                                  NULL,
+                                  NULL);
+
+        DefineCustomBoolVariable("pg_fk_indexer.debug",
+                                  "Enable debug logging for pg_fk_indexer",
+                                  NULL,
+                                  &pg_fk_indexer_debug,
+                                  false,
                                   PGC_USERSET,
                                   0,
                                   NULL,

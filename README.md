@@ -16,7 +16,8 @@ PostgreSQL does not automatically index foreign key columns. Unindexed FKs can c
 
 - Intercepts `CREATE TABLE` and `ALTER TABLE` statements transparently
 - Handles all FK declaration styles: inline references, named constraints, anonymous constraints
-- Handles composite primary key / junction tables correctly — skips FK columns already covered as the leading column of an existing index
+- Supports composite (multi-column) foreign keys — creates composite indexes automatically
+- Handles composite primary key / junction tables correctly — skips FK columns already covered as the leading columns of an existing index
 - Skips index creation if the column is already indexed (no duplicates)
 - Can be toggled on/off per session via GUC
 - Zero configuration required
@@ -61,6 +62,16 @@ SET pg_fk_indexer.enabled = on;
 
 -- Check current state
 SHOW pg_fk_indexer.enabled;
+```
+
+### Debug logging
+
+```sql
+-- Enable debug logging (writes to server log at LOG level)
+SET pg_fk_indexer.debug = on;
+
+-- Disable (default)
+SET pg_fk_indexer.debug = off;
 ```
 
 ### Running tests
