@@ -14,7 +14,7 @@ TYPEDEFS = $(PG_SRC)/src/tools/pgindent/typedefs.list
 
 .PHONY: format
 format:
-        @echo "Running pgindent..."
-        $(PGINDENT) --typedefs $(TYPEDEFS) $(MODULES).c
-        @rm -f $(MODULES).c.bak
-        @echo "Done."
+	@echo "Running pgindent..."
+	$(PGINDENT) --typedefs $(TYPEDEFS) $(MODULES).c
+	@rm -f $(MODULES).c.bak
+	@echo "Done."
