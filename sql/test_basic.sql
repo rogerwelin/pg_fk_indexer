@@ -102,6 +102,76 @@ SELECT indexname FROM pg_indexes
 DROP TABLE user_products;
 DROP TABLE products;
 
+-- Test 7a: Composite FK on CREATE TABLE
+CREATE TABLE parent_ab(a int, b int, PRIMARY KEY (a, b));
+CREATE TABLE child_ab(
+  a int,
+  b int,
+  data text,
+  CONSTRAINT fk_ab FOREIGN KEY (a, b) REFERENCES parent_ab(a, b)
+);
+
+SELECT indexname, indexdef FROM pg_indexes
+  WHERE tablename = 'child_ab' AND indexname LIKE '%_idx'
+  ORDER BY indexname;
+
+DROP TABLE child_ab;
+DROP TABLE parent_ab;
+
+-- Test 7b: Composite FK where matching index already exists (no duplicate)
+CREATE TABLE parent_ab(a int, b int, PRIMARY KEY (a, b));
+CREATE TABLE child_ab(a int, b int, data text);
+CREATE INDEX child_ab_a_b_idx ON child_ab(a, b);
+ALTER TABLE child_ab ADD CONSTRAINT fk_ab FOREIGN KEY (a, b) REFERENCES parent_ab(a, b);
+
+SELECT count(*) FROM pg_indexes
+  WHERE tablename = 'child_ab' AND indexdef LIKE '%a, b%';
+
+DROP TABLE child_ab;
+DROP TABLE parent_ab;
+
+-- Test 7c: ALTER TABLE with composite FK
+CREATE TABLE parent_ab(a int, b int, PRIMARY KEY (a, b));
+CREATE TABLE child_ab(a int, b int, data text);
+ALTER TABLE child_ab ADD FOREIGN KEY (a, b) REFERENCES parent_ab(a, b);
+
+SELECT indexname FROM pg_indexes
+  WHERE tablename = 'child_ab' AND indexname LIKE '%_idx'
+  ORDER BY indexname;
+
+DROP TABLE child_ab;
+DROP TABLE parent_ab;
+
+-- Test 7d: Three-column composite FK
+CREATE TABLE parent_abc(a int, b int, c int, PRIMARY KEY (a, b, c));
+CREATE TABLE child_abc(
+  a int,
+  b int,
+  c int,
+  data text,
+  CONSTRAINT fk_abc FOREIGN KEY (a, b, c) REFERENCES parent_abc(a, b, c)
+);
+
+SELECT indexname, indexdef FROM pg_indexes
+  WHERE tablename = 'child_abc' AND indexname LIKE '%_idx'
+  ORDER BY indexname;
+
+DROP TABLE child_abc;
+DROP TABLE parent_abc;
+
+-- Test 7e: Single-column index exists but composite FK needs (a, b) — should still create
+CREATE TABLE parent_ab(a int, b int, PRIMARY KEY (a, b));
+CREATE TABLE child_ab(a int, b int, data text);
+CREATE INDEX child_ab_a_idx ON child_ab(a);
+ALTER TABLE child_ab ADD FOREIGN KEY (a, b) REFERENCES parent_ab(a, b);
+
+SELECT indexname FROM pg_indexes
+  WHERE tablename = 'child_ab' AND indexname LIKE '%_idx'
+  ORDER BY indexname;
+
+DROP TABLE child_ab;
+DROP TABLE parent_ab;
+
 -- Cleanup
 DROP TABLE users;
 DROP EXTENSION pg_fk_indexer;
