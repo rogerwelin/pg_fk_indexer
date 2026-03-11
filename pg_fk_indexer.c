@@ -88,7 +88,8 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
                 uint32  hash = simple_hash(namebuf.data);
 
                 /* _xxxx_idx = 10 chars, so truncate at 53 to leave room */
-                truncateStringInfo(&namebuf, NAMEDATALEN - 1 - 10);
+                namebuf.len = NAMEDATALEN - 1 - 10;
+                namebuf.data[namebuf.len] = '\0';
                 appendStringInfo(&namebuf, "_%04x_idx", hash);
         }
 
