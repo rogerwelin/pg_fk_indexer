@@ -88,8 +88,7 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
                 uint32  hash = simple_hash(namebuf.data);
 
                 /* _xxxx_idx = 10 chars, so truncate at 53 to leave room */
-                namebuf.data[NAMEDATALEN - 1 - 10] = '\0';
-                namebuf.len = NAMEDATALEN - 1 - 10;
+                truncateStringInfo(&namebuf, NAMEDATALEN - 1 - 10);
                 appendStringInfo(&namebuf, "_%04x_idx", hash);
         }
 
@@ -263,8 +262,10 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                                 if (nfks >= maxfks)
                                 {
                                         maxfks = (maxfks == 0) ? 8 : maxfks * 2;
-                                        fklist = repalloc(fklist ? fklist : palloc(sizeof(FKInfo) * maxfks),
-                                                                          sizeof(FKInfo) * maxfks);
+                                        if (fklist == NULL)
+                                                fklist = palloc(sizeof(FKInfo) * maxfks);
+                                        else
+                                                fklist = repalloc(fklist, sizeof(FKInfo) * maxfks);
                                 }
 
                                 fklist[nfks].nKeys = nKeys;
