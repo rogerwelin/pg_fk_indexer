@@ -194,6 +194,13 @@ is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
         return found;
 }
 
+/* Collected FK info from catalog scan */
+typedef struct FKInfo
+{
+        int                     nKeys;
+        AttrNumber      attnums[INDEX_MAX_KEYS];
+} FKInfo;
+
 static void
 analyze_table_fks(Oid relid, RangeVar *relation)
 {
@@ -201,7 +208,12 @@ analyze_table_fks(Oid relid, RangeVar *relation)
         SysScanDesc scan;
         ScanKeyData skey;
         HeapTuple       tuple;
+        FKInfo     *fklist = NULL;
+        int                     nfks = 0;
+        int                     maxfks = 0;
+        int                     f;
 
+        /* Pass 1: collect FK column info from pg_constraint */
         pg_constraint_rel = table_open(ConstraintRelationId, AccessShareLock);
 
         ScanKeyInit(&skey,
@@ -222,12 +234,10 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                 {
                         bool            isNull;
                         Datum           adatum;
-
                         ArrayType  *arr;
                         int16      *attnums;
                         int                     nKeys;
                         int                     i;
-                        char      **colNames;
 
                         if (pg_fk_indexer_debug)
                                 elog(LOG, "pg_fk_indexer: found FK constraint \"%s\" on table %u",
@@ -249,27 +259,43 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                                 nKeys = ARR_DIMS(arr)[0];
                                 attnums = (int16 *) ARR_DATA_PTR(arr);
 
-                                if (!is_column_indexed(relid, (AttrNumber *) attnums, nKeys))
+                                /* Grow array if needed */
+                                if (nfks >= maxfks)
                                 {
-                                        colNames = palloc(sizeof(char *) * nKeys);
-                                        for (i = 0; i < nKeys; i++)
-                                                colNames[i] = get_attname(relid, attnums[i], false);
-
-                                        inject_index(relation, colNames, nKeys);
-
-                                        for (i = 0; i < nKeys; i++)
-                                                pfree(colNames[i]);
-                                        pfree(colNames);
+                                        maxfks = (maxfks == 0) ? 8 : maxfks * 2;
+                                        fklist = repalloc(fklist ? fklist : palloc(sizeof(FKInfo) * maxfks),
+                                                                          sizeof(FKInfo) * maxfks);
                                 }
+
+                                fklist[nfks].nKeys = nKeys;
+                                for (i = 0; i < nKeys; i++)
+                                        fklist[nfks].attnums[i] = attnums[i];
+                                nfks++;
                         }
                 }
         }
 
         systable_endscan(scan);
         table_close(pg_constraint_rel, AccessShareLock);
+
+        /* Pass 2: create indexes outside the catalog scan */
+        for (f = 0; f < nfks; f++)
+        {
+                if (!is_column_indexed(relid, fklist[f].attnums, fklist[f].nKeys))
+                {
+                        char      **colNames;
+                        int                     i;
+
+                        colNames = palloc(sizeof(char *) * fklist[f].nKeys);
+                        for (i = 0; i < fklist[f].nKeys; i++)
+                                colNames[i] = get_attname(relid, fklist[f].attnums[i], false);
+
+                        inject_index(relation, colNames, fklist[f].nKeys);
+                }
+        }
 }
 
-/*  Postgres 14+, check this */
+/*  Postgres 14+ */
 static void
 pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryString,
                            bool readOnlyTree, ProcessUtilityContext context,
