@@ -67,8 +67,8 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
 {
         StringInfoData buf;
         StringInfoData namebuf;
-        int                     ret;
-        int                     i;
+        int            ret;
+        int            i;
         const char     *idxname;
 
         /* Build the ideal index name: table_col1_col2_idx */
@@ -130,10 +130,10 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
 static bool
 is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
 {
-        Relation        rel;
+        Relation   rel;
         List       *indexlist;
         ListCell   *lc;
-        bool            found = false;
+        bool       found = false;
 
         /* open table with light lock */
         rel = relation_open(relid, AccessShareLock);
@@ -143,11 +143,11 @@ is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
 
         foreach(lc, indexlist)
         {
-                Oid                     indexOid = lfirst_oid(lc);
-                HeapTuple       indexTuple;
+                Oid           indexOid = lfirst_oid(lc);
+                HeapTuple     indexTuple;
                 Form_pg_index indexForm;
-                int                     i;
-                bool            match;
+                int           i;
+                bool          match;
 
                 /* Look up the specific index in the pg_index catalog */
                 indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexOid));
@@ -197,7 +197,7 @@ is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
 /* Collected FK info from catalog scan */
 typedef struct FKInfo
 {
-        int                     nKeys;
+        int             nKeys;
         AttrNumber      attnums[INDEX_MAX_KEYS];
 } FKInfo;
 
@@ -205,13 +205,13 @@ static void
 analyze_table_fks(Oid relid, RangeVar *relation)
 {
         Relation        pg_constraint_rel;
-        SysScanDesc scan;
-        ScanKeyData skey;
+        SysScanDesc     scan;
+        ScanKeyData     skey;
         HeapTuple       tuple;
-        FKInfo     *fklist = NULL;
-        int                     nfks = 0;
-        int                     maxfks = 0;
-        int                     f;
+        FKInfo          *fklist = NULL;
+        int             nfks = 0;
+        int             maxfks = 0;
+        int             f;
 
         /* Pass 1: collect FK column info from pg_constraint */
         pg_constraint_rel = table_open(ConstraintRelationId, AccessShareLock);
@@ -232,12 +232,12 @@ analyze_table_fks(Oid relid, RangeVar *relation)
 
                 if (con->contype == CONSTRAINT_FOREIGN)
                 {
-                        bool            isNull;
-                        Datum           adatum;
+                        bool       isNull;
+                        Datum      adatum;
                         ArrayType  *arr;
                         int16      *attnums;
-                        int                     nKeys;
-                        int                     i;
+                        int        nKeys;
+                        int        i;
 
                         if (pg_fk_indexer_debug)
                                 elog(LOG, "pg_fk_indexer: found FK constraint \"%s\" on table %u",
@@ -288,7 +288,7 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                 if (!is_column_indexed(relid, fklist[f].attnums, fklist[f].nKeys))
                 {
                         char      **colNames;
-                        int                     i;
+                        int       i;
 
                         colNames = palloc(sizeof(char *) * fklist[f].nKeys);
                         for (i = 0; i < fklist[f].nKeys; i++)
