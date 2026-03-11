@@ -19,6 +19,8 @@ PostgreSQL does not automatically index foreign key columns. Unindexed FKs can c
 - Supports composite (multi-column) foreign keys — creates composite indexes automatically
 - Handles composite primary key / junction tables correctly — skips FK columns already covered as the leading columns of an existing index
 - Skips index creation if the column is already indexed (no duplicates)
+- Safe by design — index creation failures emit a warning without aborting the original DDL
+- Handles long table/column names gracefully — truncates with a hash suffix to stay within PostgreSQL's 63-byte identifier limit
 - Can be toggled on/off per session via GUC
 - Zero configuration required
 

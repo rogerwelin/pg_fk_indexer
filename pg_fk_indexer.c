@@ -294,7 +294,17 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         for (i = 0; i < fklist[f].nKeys; i++)
                                 colNames[i] = get_attname(relid, fklist[f].attnums[i], false);
 
-                        inject_index(relation, colNames, fklist[f].nKeys);
+                        PG_TRY();
+                        {
+                                inject_index(relation, colNames, fklist[f].nKeys);
+                        }
+                        PG_CATCH();
+                        {
+                                FlushErrorState();
+                                elog(WARNING, "pg_fk_indexer: failed to create index on %s",
+                                         relation->relname);
+                        }
+                        PG_END_TRY();
                 }
         }
 }
