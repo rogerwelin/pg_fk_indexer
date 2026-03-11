@@ -28,21 +28,24 @@ sudo make install
 
 ### Usage
 
-Load the library for the current session:
-
-```sql
-LOAD 'pg_fk_indexer';
-
--- Foreign keys are now auto-indexed
-CREATE TABLE users (id int PRIMARY KEY, username text);
-CREATE TABLE orders (user_id int REFERENCES users(id));
--- ^^ index on orders(user_id) is created automatically
-```
-
-Or (recommended) load it automatically for all sessions by adding to `postgresql.conf`:
+Load extension automatically for all sessions by adding to `postgresql.conf`:
 
 ```
 shared_preload_libraries = 'pg_fk_indexer'
+```
+
+
+```sql
+-- Foreign keys are now auto-indexed
+CREATE TABLE users (id int PRIMARY KEY, username text);
+CREATE TABLE orders (user_id int REFERENCES users(id));
+--  index on orders(user_id) is created automatically
+```
+
+Or load the library for the current session only:
+
+```sql
+LOAD 'pg_fk_indexer';
 ```
 
 ### Configuration
@@ -63,69 +66,4 @@ SHOW pg_fk_indexer.enabled;
 ```bash
 make installcheck
 ```
-
-
-
-
-
-
-
-
-
-### OLD
-
-neovim integration for clangd  
-bear --make
-
-make
-sudo make install
-sudo -u postgres psql -d postgres
-
-LOAD 'pg_fk_indexer';
-
-### Testcases
-
-create table users(id int PRIMARY KEY, username text);
-
-fk1:: 
-create table orders(order_id int, user_id int, CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id));
-
-fk2:: 
-CREATE TABLE orders (user_id int REFERENCES users(id));
-
-fk3.1::
-CREATE TABLE orders (user_id int);
-ALTER TABLE orders
-ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);
-
-fk3.2::
-CREATE TABLE orders (user_id int);
-ALTER TABLE orders
-ADD FOREIGN KEY (user_id) REFERENCES users(id);
-
-fk4.1:: (composite key - one column is foreign key)
-CREATE TABLE users (id int PRIMARY KEY, username text);
-CREATE TABLE products (id int PRIMARY KEY, name text);
-CREATE TABLE order_items (
-    order_id int,
-    product_id int,
-    quantity int,
-    PRIMARY KEY (order_id, product_id),
-    CONSTRAINT fk_product FOREIGN KEY (product_id) REFERENCES products(id)
-);
-
-fk4.2:: (composite key - both columns are foreign keys)
-CREATE TABLE users (id int PRIMARY KEY, username text);
-CREATE TABLE products (id int PRIMARY KEY, name text);
-CREATE TABLE user_products (
-    user_id int,
-    product_id int,
-    PRIMARY KEY (user_id, product_id),
-    CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id),
-    CONSTRAINT fk_product FOREIGN KEY (product_id) REFERENCES products(id)
-);
-
-### Run tests
-
-make installcheck
 
