@@ -46,26 +46,60 @@ static ProcessUtility_hook_type prev_utility_hook = NULL;
 static bool pg_fk_indexer_enabled = true;
 static bool pg_fk_indexer_debug = false;
 
+/*
+ * simple_hash - compute a simple hash for index name truncation.
+ * Returns a 16-bit value used as a 4-hex-char suffix.
+ */
+static uint32
+simple_hash(const char *str)
+{
+        uint32 hash = 5381;
+
+        while (*str)
+                hash = ((hash << 5) + hash) + (unsigned char) *str++;
+
+        return hash & 0xFFFF;
+}
+
 static void
 inject_index(RangeVar *relation, char **colNames, int nCols)
 {
         StringInfoData buf;
+        StringInfoData namebuf;
         int                     ret;
         int                     i;
+        const char     *idxname;
 
-        initStringInfo(&buf);
+        /* Build the ideal index name: table_col1_col2_idx */
+        initStringInfo(&namebuf);
+        appendStringInfoString(&namebuf, relation->relname);
+        for (i = 0; i < nCols; i++)
+                appendStringInfo(&namebuf, "_%s", colNames[i]);
+        appendStringInfoString(&namebuf, "_idx");
 
         /*
-         * CREATE INDEX IF NOT EXISTS <table>_<col1>_<col2>_idx
-         *   ON <schema>.<table> (<col1>, <col2>)
-         * Use quote_identifier to handle names with spaces, reserved words, or
-         * mixed case.
+         * PostgreSQL identifiers are limited to NAMEDATALEN-1 (63) bytes.
+         * If the name is too long, truncate and append a hash to avoid
+         * collisions.
          */
-        appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s",
-                          quote_identifier(relation->relname));
-        for (i = 0; i < nCols; i++)
-                appendStringInfo(&buf, "_%s", quote_identifier(colNames[i]));
-        appendStringInfo(&buf, "_idx ON %s%s%s (",
+        if (namebuf.len > NAMEDATALEN - 1)
+        {
+                uint32  hash = simple_hash(namebuf.data);
+
+                /* _xxxx_idx = 10 chars, so truncate at 53 to leave room */
+                namebuf.data[NAMEDATALEN - 1 - 10] = '\0';
+                namebuf.len = NAMEDATALEN - 1 - 10;
+                appendStringInfo(&namebuf, "_%04x_idx", hash);
+        }
+
+        idxname = quote_identifier(namebuf.data);
+
+        /*
+         * CREATE INDEX IF NOT EXISTS <name> ON <schema>.<table> (<col1>, <col2>)
+         */
+        initStringInfo(&buf);
+        appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s ON %s%s%s (",
+                          idxname,
                           (relation->schemaname ? quote_identifier(relation->schemaname) : ""),
                           (relation->schemaname ? "." : ""),
                           quote_identifier(relation->relname));
@@ -89,6 +123,7 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
                 elog(ERROR, "pg_fk_indexer: SPI_execute failed with error %d", ret);
 
         SPI_finish();
+        pfree(namebuf.data);
         pfree(buf.data);
 }
 
@@ -186,9 +221,6 @@ analyze_table_fks(Oid relid, RangeVar *relation)
 
                 if (con->contype == CONSTRAINT_FOREIGN)
                 {
-                        if (pg_fk_indexer_debug)
-                                elog(LOG, "pg_fk_indexer: found FK constraint \"%s\" on table %u",
-                                         NameStr(con->conname), relid);
                         bool            isNull;
                         Datum           adatum;
 
@@ -197,6 +229,10 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         int                     nKeys;
                         int                     i;
                         char      **colNames;
+
+                        if (pg_fk_indexer_debug)
+                                elog(LOG, "pg_fk_indexer: found FK constraint \"%s\" on table %u",
+                                         NameStr(con->conname), relid);
 
                         adatum = heap_getattr(tuple,
                                               Anum_pg_constraint_conkey,

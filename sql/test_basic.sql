@@ -172,6 +172,19 @@ SELECT indexname FROM pg_indexes
 DROP TABLE child_ab;
 DROP TABLE parent_ab;
 
+-- Test 8: Long names that exceed NAMEDATALEN (63 bytes) — should truncate with hash
+CREATE TABLE long_parent(id int PRIMARY KEY);
+CREATE TABLE this_is_a_very_long_table_name_that_will_exceed(
+  and_this_is_a_very_long_column_name_too int
+    REFERENCES long_parent(id)
+);
+
+SELECT indexname FROM pg_indexes
+  WHERE tablename = 'this_is_a_very_long_table_name_that_will_exceed' AND indexname LIKE '%_idx';
+
+DROP TABLE this_is_a_very_long_table_name_that_will_exceed;
+DROP TABLE long_parent;
+
 -- Cleanup
 DROP TABLE users;
 DROP EXTENSION pg_fk_indexer;
