@@ -78,6 +78,10 @@ SET pg_fk_indexer.debug = on;
 SET pg_fk_indexer.debug = off;
 ```
 
+### Limitations
+
+- Indexes are created with plain `CREATE INDEX` (blocking), not `CREATE INDEX CONCURRENTLY`. For `ALTER TABLE ADD FOREIGN KEY` on very large tables you may want to disable the extension (`SET pg_fk_indexer.enabled = off`) and create the index concurrently by hand.
+
 ### Running tests
 
 ```bash
