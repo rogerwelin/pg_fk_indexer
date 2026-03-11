@@ -59,12 +59,12 @@ inject_index(RangeVar *relation, char *colName)
          * mixed case.
          */
         appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s_%s_idx ON %s%s%s (%s)",
-                                         quote_identifier(relation->relname),
-                                         quote_identifier(colName),
-                                         (relation->schemaname ? quote_identifier(relation->schemaname) : ""),
-                                         (relation->schemaname ? "." : ""),
-                                         quote_identifier(relation->relname),
-                                         quote_identifier(colName));
+                          quote_identifier(relation->relname),
+                          quote_identifier(colName),
+                          (relation->schemaname ? quote_identifier(relation->schemaname) : ""),
+                          (relation->schemaname ? "." : ""),
+                          quote_identifier(relation->relname),
+                          quote_identifier(colName));
 
         /* elog(NOTICE, "pg_fk_indexer: Auto-indexing: %s", buf.data); */
 
@@ -140,14 +140,14 @@ analyze_table_fks(Oid relid, RangeVar *relation)
         pg_constraint_rel = table_open(ConstraintRelationId, AccessShareLock);
 
         ScanKeyInit(&skey,
-                                Anum_pg_constraint_conrelid,
-                                BTEqualStrategyNumber,
-                                F_OIDEQ,
-                                ObjectIdGetDatum(relid));
+                    Anum_pg_constraint_conrelid,
+                    BTEqualStrategyNumber,
+                    F_OIDEQ,
+                    ObjectIdGetDatum(relid));
 
         scan = systable_beginscan(pg_constraint_rel,
-                                                          ConstraintRelidTypidNameIndexId,
-                                                          true, NULL, 1, &skey);
+                                                  ConstraintRelidTypidNameIndexId,
+                                                  true, NULL, 1, &skey);
 
         while (HeapTupleIsValid(tuple = systable_getnext(scan)))
         {
@@ -164,9 +164,9 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         char       *colName;
 
                         adatum = heap_getattr(tuple,
-                                                                  Anum_pg_constraint_conkey,
-                                                                  RelationGetDescr(pg_constraint_rel),
-                                                                  &isNull);
+                                              Anum_pg_constraint_conkey,
+                                              RelationGetDescr(pg_constraint_rel),
+                                              &isNull);
 
                         if (!isNull)
                         {
@@ -201,9 +201,9 @@ analyze_table_fks(Oid relid, RangeVar *relation)
 /*  Postgres 14+, check this */
 static void
 pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryString,
-                                                   bool readOnlyTree, ProcessUtilityContext context,
-                                                   ParamListInfo params, QueryEnvironment *queryEnv,
-                                                   DestReceiver *dest, QueryCompletion *qc)
+                           bool readOnlyTree, ProcessUtilityContext context,
+                           ParamListInfo params, QueryEnvironment *queryEnv,
+                           DestReceiver *dest, QueryCompletion *qc)
 {
         Node       *parsetree = pstmt->utilityStmt;
 
@@ -248,15 +248,15 @@ void
 _PG_init(void)
 {
         DefineCustomBoolVariable("pg_fk_indexer.enabled",
-                                                         "Automatically create indexes on foreign key columns",
-                                                         NULL,
-                                                         &pg_fk_indexer_enabled,
-                                                         true,
-                                                         PGC_USERSET,
-                                                         0,
-                                                         NULL,
-                                                         NULL,
-                                                         NULL);
+                                  "Automatically create indexes on foreign key columns",
+                                  NULL,
+                                  &pg_fk_indexer_enabled,
+                                  true,
+                                  PGC_USERSET,
+                                  0,
+                                  NULL,
+                                  NULL,
+                                  NULL);
 
         prev_utility_hook = ProcessUtility_hook;
 
