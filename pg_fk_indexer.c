@@ -123,8 +123,6 @@ inject_index(RangeVar *relation, char **colNames, int nCols)
                 elog(ERROR, "pg_fk_indexer: SPI_execute failed with error %d", ret);
 
         SPI_finish();
-        pfree(namebuf.data);
-        pfree(buf.data);
 }
 
 
@@ -243,7 +241,8 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         {
                                 arr = DatumGetArrayTypeP(adatum);
 
-                                if (!(ARR_DIMS(arr)[0] >= 1))
+                                if (ARR_NDIM(arr) != 1 || ARR_HASNULL(arr) ||
+                                        !(ARR_DIMS(arr)[0] >= 1))
                                         continue;
 
                                 nKeys = ARR_DIMS(arr)[0];
