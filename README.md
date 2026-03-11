@@ -64,6 +64,8 @@ SET pg_fk_indexer.enabled = on;
 SHOW pg_fk_indexer.enabled;
 ```
 
+> **Note:** `pg_fk_indexer.enabled` is a per-session setting (`PGC_USERSET`). Any user can disable auto-indexing for their own session — this does not affect other sessions. If you need superuser-only control, you can change the GUC context to `PGC_SUSET` in the source and recompile.
+
 ### Debug logging
 
 ```sql
