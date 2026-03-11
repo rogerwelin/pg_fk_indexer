@@ -171,6 +171,10 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         if (!isNull)
                         {
                                 arr = DatumGetArrayTypeP(adatum);
+
+                                if (!(ARR_DIMS(arr)[0] >= 1))
+                                        continue;
+
                                 attnums = (int16 *) ARR_DATA_PTR(arr);
 
                                 /* Now we can assign values safely */
