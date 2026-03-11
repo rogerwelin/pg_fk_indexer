@@ -47,8 +47,9 @@ static bool pg_fk_indexer_enabled = true;
 static bool pg_fk_indexer_debug = false;
 
 /*
- * simple_hash - compute a simple hash for index name truncation.
- * Returns a 16-bit value used as a 4-hex-char suffix.
+ * simple_hash - djb2 hash 
+ * Returns a 16-bit value used as a 4-hex-char suffix for truncated
+ * index names.
  */
 static uint32
 simple_hash(const char *str)
@@ -319,7 +320,7 @@ pg_fk_indexer_utility_hook(PlannedStmt *pstmt, const char *queryString,
         }
 }
 
-/*  runs when extention is loaded into memory */
+/*  runs when extension is loaded into memory */
 void
 _PG_init(void)
 {
@@ -350,7 +351,7 @@ _PG_init(void)
         ProcessUtility_hook = pg_fk_indexer_utility_hook;
 }
 
-/*  runs when extention is unloaded */
+/*  runs when extension is unloaded */
 void
 _PG_fini(void)
 {
