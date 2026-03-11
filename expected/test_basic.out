@@ -207,7 +207,7 @@ CREATE TABLE this_is_a_very_long_table_name_that_will_exceed(
 SELECT indexname FROM pg_indexes
   WHERE tablename = 'this_is_a_very_long_table_name_that_will_exceed' AND indexname LIKE '%_idx';
                            indexname
----------------------------------------------------------------
+----------------------------------------------------------------
  this_is_a_very_long_table_name_that_will_exceed_and_t_11c1_idx
 (1 row)
 
