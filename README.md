@@ -5,6 +5,8 @@
 
 PostgreSQL extension that automatically creates indexes on foreign key columns - bringing a behavior that MySQL has provided by default since day one.
 
+<img width="322" height="309" alt="pg_fk_indexer" src="https://github.com/user-attachments/assets/fadcbc64-1f13-49ed-9e86-e4f8816be446" />
+
 
 ### Why?
 
