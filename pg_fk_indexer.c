@@ -46,27 +46,35 @@ static ProcessUtility_hook_type prev_utility_hook = NULL;
 static bool pg_fk_indexer_enabled = true;
 
 static void
-inject_index(RangeVar *relation, char *colName)
+inject_index(RangeVar *relation, char **colNames, int nCols)
 {
         StringInfoData buf;
         int                     ret;
+        int                     i;
 
         initStringInfo(&buf);
 
         /*
-         * CREATE INDEX IF NOT EXISTS <index_name> ON <schema>.<table> (<column>)
+         * CREATE INDEX IF NOT EXISTS <table>_<col1>_<col2>_idx
+         *   ON <schema>.<table> (<col1>, <col2>)
          * Use quote_identifier to handle names with spaces, reserved words, or
          * mixed case.
          */
-        appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s_%s_idx ON %s%s%s (%s)",
-                          quote_identifier(relation->relname),
-                          quote_identifier(colName),
+        appendStringInfo(&buf, "CREATE INDEX IF NOT EXISTS %s",
+                          quote_identifier(relation->relname));
+        for (i = 0; i < nCols; i++)
+                appendStringInfo(&buf, "_%s", quote_identifier(colNames[i]));
+        appendStringInfo(&buf, "_idx ON %s%s%s (",
                           (relation->schemaname ? quote_identifier(relation->schemaname) : ""),
                           (relation->schemaname ? "." : ""),
-                          quote_identifier(relation->relname),
-                          quote_identifier(colName));
-
-        /* elog(NOTICE, "pg_fk_indexer: Auto-indexing: %s", buf.data); */
+                          quote_identifier(relation->relname));
+        for (i = 0; i < nCols; i++)
+        {
+                if (i > 0)
+                        appendStringInfoString(&buf, ", ");
+                appendStringInfoString(&buf, quote_identifier(colNames[i]));
+        }
+        appendStringInfoChar(&buf, ')');
 
         if ((ret = SPI_connect()) != SPI_OK_CONNECT)
                 elog(ERROR, "pg_fk_indexer: SPI_connect failed with error %d", ret);
@@ -82,7 +90,7 @@ inject_index(RangeVar *relation, char *colName)
 
 
 static bool
-is_column_indexed(Oid relid, AttrNumber attnum)
+is_column_indexed(Oid relid, AttrNumber *attnums, int nKeys)
 {
         Relation        rel;
         List       *indexlist;
@@ -100,30 +108,46 @@ is_column_indexed(Oid relid, AttrNumber attnum)
                 Oid                     indexOid = lfirst_oid(lc);
                 HeapTuple       indexTuple;
                 Form_pg_index indexForm;
+                int                     i;
+                bool            match;
 
                 /* Look up the specific index in the pg_index catalog */
                 indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexOid));
                 if (!HeapTupleIsValid(indexTuple))
-                {
                         continue;
-                }
 
                 indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
 
                 /*
-                 * Check if our column is the LEADING column (index 0). Postgres
-                 * represents the array of columns in indkey.
+                 * Check if the FK columns match the leading columns of this
+                 * index.  An index on (a, b, c) covers FK (a, b), but an
+                 * index on (a) alone does not cover FK (a, b).
                  */
-                if (indexForm->indkey.values[0] == attnum)
+                if (indexForm->indnatts < nKeys)
+                {
+                        ReleaseSysCache(indexTuple);
+                        continue;
+                }
+
+                match = true;
+                for (i = 0; i < nKeys; i++)
+                {
+                        if (indexForm->indkey.values[i] != attnums[i])
+                        {
+                                match = false;
+                                break;
+                        }
+                }
+
+                ReleaseSysCache(indexTuple);
+
+                if (match)
                 {
                         found = true;
-                        ReleaseSysCache(indexTuple);
                         break;
                 }
-                ReleaseSysCache(indexTuple);
         }
 
-        /* 3. Close the relation and return our findings */
         relation_close(rel, AccessShareLock);
 
         return found;
@@ -160,8 +184,9 @@ analyze_table_fks(Oid relid, RangeVar *relation)
 
                         ArrayType  *arr;
                         int16      *attnums;
-                        AttrNumber      attnum;
-                        char       *colName;
+                        int                     nKeys;
+                        int                     i;
+                        char      **colNames;
 
                         adatum = heap_getattr(tuple,
                                               Anum_pg_constraint_conkey,
@@ -175,24 +200,20 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                                 if (!(ARR_DIMS(arr)[0] >= 1))
                                         continue;
 
+                                nKeys = ARR_DIMS(arr)[0];
                                 attnums = (int16 *) ARR_DATA_PTR(arr);
 
-                                /* Now we can assign values safely */
-                                attnum = attnums[0];
-                                colName = get_attname(relid, attnum, false);
-
-                                if (!is_column_indexed(relid, attnum))
+                                if (!is_column_indexed(relid, (AttrNumber *) attnums, nKeys))
                                 {
-                                        /*
-                                         * elog(NOTICE, "pg_fk_indexer: %s.%s NEEDS an index!",
-                                         * relation->relname, colName);
-                                         */
-                                        inject_index(relation, colName);
-                                }
+                                        colNames = palloc(sizeof(char *) * nKeys);
+                                        for (i = 0; i < nKeys; i++)
+                                                colNames[i] = get_attname(relid, attnums[i], false);
 
-                                if (colName)
-                                {
-                                        pfree(colName);
+                                        inject_index(relation, colNames, nKeys);
+
+                                        for (i = 0; i < nKeys; i++)
+                                                pfree(colNames[i]);
+                                        pfree(colNames);
                                 }
                         }
                 }
