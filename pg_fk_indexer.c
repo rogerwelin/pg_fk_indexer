@@ -251,7 +251,9 @@ analyze_table_fks(Oid relid, RangeVar *relation)
                         if (!isNull)
                         {
                                 arr = DatumGetArrayTypeP(adatum);
-                                Assert(ARR_NDIM(arr) == 1 && !ARR_HASNULL(arr));
+
+                                if (ARR_NDIM(arr) != 1 || ARR_HASNULL(arr))
+                                        elog(ERROR, "pg_fk_indexer: unexpected conkey array format");
 
                                 if (!(ARR_DIMS(arr)[0] >= 1))
                                         continue;
