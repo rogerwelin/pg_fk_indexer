@@ -1,0 +1,37 @@
+{
+  "name": "pg_fk_indexer",
+  "abstract": "Automatically creates indexes on foreign key columns",
+  "version": "1.0.0",
+  "maintainer": "Roger Welin",
+  "license": "postgresql",
+  "provides": {
+    "pg_fk_indexer": {
+      "file": "pg_fk_indexer--1.0.sql",
+      "version": "1.0.0",
+      "abstract": "Automatically creates indexes on foreign key columns"
+    }
+  },
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "PostgreSQL": "14.0"
+      }
+    }
+  },
+  "resources": {
+    "repository": {
+      "url": "https://github.com/rogerwelin/pg_fk_indexer.git",
+      "web": "https://github.com/rogerwelin/pg_fk_indexer",
+      "type": "git"
+    },
+    "bugtracker": {
+      "web": "https://github.com/rogerwelin/pg_fk_indexer/issues"
+    }
+  },
+  "generated_by": "Roger Welin",
+  "meta-spec": {
+    "version": "1.0.0",
+    "url": "https://pgxn.org/meta/spec.txt"
+  },
+  "tags": ["indexing", "foreign-key", "automation", "ddl"]
+}
